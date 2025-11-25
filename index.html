@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Topic Questions Finder</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind to use a dark theme default and 'Inter' font -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        // Custom dark palette
+                        'dark-bg': '#0f172a', /* slate-900 */
+                        'dark-card': '#1e293b', /* slate-800 */
+                        'dark-text': '#f1f5f9', /* slate-100 */
+                        'dark-accent': '#6366f1', /* indigo-500 */
+                        // Custom light palette
+                        'light-bg': '#f8fafc', /* slate-50 */
+                        'light-card': '#ffffff', /* white */
+                        'light-text': '#0f172a', /* slate-900 */
+                        'light-input': '#f1f5f9', /* slate-100 */
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Apply 'Inter' font across the board */
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s, color 0.5s;
+        }
+
+        /* Loading animation colors are dependent on the accent color variable */
+        .dot-pulse {
+            position: relative;
+            left: -9999px;
+            width: 10px;
+            height: 10px;
+            border-radius: 5px;
+            background-color: #6366f1; /* Use accent color directly */
+            color: #6366f1;
+            box-shadow: 9999px 0 0 -5px;
+            animation: dot-pulse 1.5s infinite linear;
+            animation-delay: 0.25s;
+        }
+        .dot-pulse::before, .dot-pulse::after {
+            content: '';
+            display: inline-block;
+            position: absolute;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 5px;
+            background-color: #6366f1;
+            color: #6366f1;
+        }
+        .dot-pulse::before {
+            box-shadow: 9999px 0 0 -5px;
+            animation: dot-pulse 1.5s infinite linear;
+            animation-delay: 0s;
+        }
+        .dot-pulse::after {
+            box-shadow: 10008px 0 0 -5px;
+            animation: dot-pulse 1.5s infinite linear;
+            animation-delay: 0.5s;
+        }
+        @keyframes dot-pulse {
+            0% { box-shadow: 9999px 0 0 -5px; }
+            30% { box-shadow: 9999px 0 0 2px; }
+            60%, 100% { box-shadow: 9999px 0 0 -5px; }
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8 flex flex-col items-center transition-colors duration-500 bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text">
+
+    <!-- Main Container -->
+    <div class="w-full max-w-4xl">
+        
+        <!-- Header & Theme Toggle -->
+        <header class="flex justify-between items-center mb-8 pt-4">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-dark-accent">
+                Topic Question Explorer
+            </h1>
+            <button id="theme-toggle" class="p-2 rounded-full bg-light-input dark:bg-dark-card text-light-text dark:text-dark-text shadow-md transition duration-200 hover:scale-105" aria-label="Toggle theme">
+                <!-- Moon icon (Dark Mode) -->
+                <svg id="moon-icon" class="w-6 h-6 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+                <!-- Sun icon (Light Mode) -->
+                <svg id="sun-icon" class="w-6 h-6 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- Input Form Card -->
+        <div class="bg-light-card dark:bg-dark-card p-6 rounded-xl shadow-lg mb-8 transition-colors duration-500 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-semibold mb-4">What topic are you researching?</h2>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <input
+                    type="text"
+                    id="topic-input"
+                    placeholder="e.g., 'sustainable fashion trends' or 'quantum computing in finance'"
+                    class="flex-grow p-3 rounded-lg bg-light-input dark:bg-gray-700 text-light-text dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-dark-accent focus:border-transparent transition"
+                />
+                <button
+                    id="fetch-button"
+                    class="sm:w-auto px-6 py-3 rounded-lg font-bold bg-dark-accent text-white shadow-lg shadow-dark-accent/50 hover:bg-indigo-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Find Questions
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Display Card -->
+        <div id="results-container" class="bg-light-card dark:bg-dark-card p-6 rounded-xl shadow-lg transition-colors duration-500 border border-gray-200 dark:border-gray-700 min-h-[200px] flex flex-col relative">
+            
+            <h2 id="results-title" class="text-xl font-semibold mb-4 opacity-0 transition-opacity duration-300"></h2>
+            
+            <!-- Initial State Message (Centered vertically) -->
+            <div id="initial-state-message" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+                <svg class="w-12 h-12 mb-4 text-dark-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <p class="text-lg font-medium mb-1 text-gray-500 dark:text-gray-400">Explore Search Intent</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Enter a keyword above to find the top 10 questions people are asking online right now.</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-indicator" class="hidden absolute inset-0 flex justify-center items-center bg-light-card/90 dark:bg-dark-card/90 z-10 rounded-xl">
+                <div class="dot-pulse"></div>
+                <p class="ml-4 text-gray-500 dark:text-gray-400">Searching the web for current trends...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="error-message" class="hidden z-20 text-red-500 dark:text-red-400 text-center flex-grow justify-center items-center absolute inset-0 p-6">
+                <p class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 shadow-xl">
+                    <span class="font-bold">Error: Search Failed.</span> The model could not retrieve or format the data. Please try a different topic or check the console for technical details.
+                </p>
+            </div>
+
+            <!-- Content List -->
+            <ul id="questions-list" class="space-y-4 hidden flex-grow w-full">
+                <!-- Questions will be injected here -->
+            </ul>
+
+            <!-- Sources -->
+            <div id="sources-container" class="mt-8 pt-4 border-t border-gray-300 dark:border-gray-700 hidden w-full">
+                <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Sources</h3>
+                <ul id="sources-list" class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                    <!-- Sources will be injected here -->
+                </ul>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Global variables provided by the Canvas environment
+        const apiKey = "AIzaSyB1_bcsEwWqts3BDhXf73By_cIsI5ewLKE";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        // DOM elements
+        const htmlElement = document.documentElement;
+        const themeToggle = document.getElementById('theme-toggle');
+        const topicInput = document.getElementById('topic-input');
+        const fetchButton = document.getElementById('fetch-button');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const errorMessage = document.getElementById('error-message');
+        const questionsList = document.getElementById('questions-list');
+        const sourcesContainer = document.getElementById('sources-container');
+        const sourcesList = document.getElementById('sources-list');
+        const resultsTitle = document.getElementById('results-title');
+        const initialStateMessage = document.getElementById('initial-state-message');
+
+
+        // --- Theme Management ---
+        const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        // Initialize theme based on local storage or system preference
+        function initTheme() {
+            const storedTheme = localStorage.getItem('theme');
+            if (storedTheme === 'light') {
+                htmlElement.classList.remove('dark');
+            } else if (storedTheme === 'dark') {
+                htmlElement.classList.add('dark');
+            } else if (isSystemDark) {
+                // If no preference stored, use system preference 
+                if (isSystemDark) {
+                    htmlElement.classList.add('dark');
+                } else {
+                    htmlElement.classList.remove('dark');
+                }
+            }
+        }
+
+        function toggleTheme() {
+            if (htmlElement.classList.contains('dark')) {
+                htmlElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                htmlElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        themeToggle.addEventListener('click', toggleTheme);
+        initTheme();
+
+        // --- Utility Functions ---
+
+        /**
+         * Clears all dynamic content from the results area and resets to initial state.
+         */
+        function clearResults() {
+            questionsList.innerHTML = '';
+            sourcesList.innerHTML = '';
+            resultsTitle.classList.add('opacity-0');
+            questionsList.classList.add('hidden');
+            sourcesContainer.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            initialStateMessage.classList.remove('hidden');
+        }
+
+        /**
+         * Parses the raw text response from the model (which should be a numbered list)
+         * into an array of strings.
+         * @param {string} text - The raw text content from the API.
+         * @returns {string[]} An array of cleaned question strings.
+         */
+        function parseQuestions(text) {
+            // Split by newline and filter out empty lines
+            let lines = text.split('\n').filter(line => line.trim() !== '');
+
+            return lines.map(line => {
+                // Remove numbering (1., 2), list markers (*, -), and leading/trailing whitespace
+                return line.replace(/^\s*(\d+\.|\*|\-|\d+)\s*/, '').trim();
+            });
+        }
+
+        /**
+         * Displays the generated questions in the UI.
+         * @param {string[]} questions - Array of question strings.
+         */
+        function displayQuestions(questions) {
+            questionsList.classList.remove('hidden');
+
+            if (questions.length === 0) {
+                questionsList.innerHTML = `<li class="text-center text-gray-500">The model returned no specific questions for this topic.</li>`;
+                return;
+            }
+
+            questions.forEach(question => {
+                const li = document.createElement('li');
+                // Apply theme-specific background colors for list items
+                li.className = 'flex items-start bg-gray-100 dark:bg-gray-800 p-3 rounded-lg shadow-sm hover:shadow-md transition duration-200';
+                li.innerHTML = `
+                    <!-- Solid bullet point -->
+                    <div class="w-2.5 h-2.5 mr-4 mt-2 flex-shrink-0 bg-dark-accent rounded-full"></div>
+                    <span class="flex-grow">${question}</span>
+                `;
+                questionsList.appendChild(li);
+            });
+        }
+
+        /**
+         * Displays search grounding sources.
+         * @param {object[]} sources - Array of source objects (uri, title).
+         */
+        function displaySources(sources) {
+            if (sources.length > 0) {
+                sourcesContainer.classList.remove('hidden');
+                sources.forEach(source => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <a href="${source.uri}" target="_blank" rel="noopener noreferrer" class="hover:text-dark-accent transition duration-150 truncate block">
+                            <span class="font-medium">${source.title}</span> - <span class="text-gray-500 dark:text-gray-500">${source.uri.split('/')[2]}</span>
+                        </a>
+                    `;
+                    sourcesList.appendChild(li);
+                });
+            } else {
+                sourcesContainer.classList.add('hidden');
+            }
+        }
+
+        // --- Core API Interaction ---
+
+        async function fetchQuestions() {
+            const topic = topicInput.value.trim();
+            if (!topic) {
+                // Ensure initial state is showing if no topic is entered
+                clearResults(); 
+                resultsTitle.textContent = "Please enter a topic before searching.";
+                resultsTitle.classList.remove('opacity-0');
+                initialStateMessage.classList.add('hidden'); // Hide the standard initial message
+                return;
+            }
+
+            clearResults();
+            initialStateMessage.classList.add('hidden');
+            loadingIndicator.classList.remove('hidden');
+            fetchButton.disabled = true;
+
+            const userQuery = `Topic: ${topic}`;
+            // System prompt updated to request 10 questions and more variety (How, Why, Best, Vs)
+            const systemPrompt = "You are a market research assistant. Analyze the current search landscape for the provided topic and return the 10 most frequently asked questions or highly searched queries related to it, ensuring a mix of informational (What, How, Why) and comparative (Best, Vs, Or) queries. Output only a numbered list of the questions/queries, without any introductory or concluding text. Do not use markdown formatting in the list, just the numbers and text.";
+            
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            const maxRetries = 3;
+            let currentRetry = 0;
+
+            while (currentRetry < maxRetries) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                        throw new Error("Invalid response structure or empty content.");
+                    }
+
+                    const rawText = candidate.content.parts[0].text;
+                    const questions = parseQuestions(rawText);
+
+                    let sources = [];
+                    const groundingMetadata = candidate.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    // Success! Display results
+                    resultsTitle.textContent = `Top 10 Questions for: "${topic}"`;
+                    resultsTitle.classList.remove('opacity-0');
+                    displayQuestions(questions);
+                    displaySources(sources);
+                    break; // Exit the loop on success
+
+                } catch (error) {
+                    currentRetry++;
+                    console.error(`Attempt ${currentRetry} failed:`, error);
+                    if (currentRetry >= maxRetries) {
+                        errorMessage.classList.remove('hidden');
+                        resultsTitle.textContent = "Search Failed";
+                        resultsTitle.classList.remove('opacity-0');
+                    } else {
+                        // Exponential backoff: 1s, 2s, 4s delay
+                        const delay = Math.pow(2, currentRetry) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                    fetchButton.disabled = false;
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+        fetchButton.addEventListener('click', fetchQuestions);
+        topicInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                fetchQuestions();
+            }
+        });
+    </script>
+</body>
+</html>
+
+
